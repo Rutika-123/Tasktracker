@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Task Tracker Dashboard</title>
+  <link rel="stylesheet" href="styledash.css" />
+</head>
+<body>
+
+<!-- ================= LOGIN / REGISTER ================= -->
+<div class="auth-container" id="authPage">
+  <div class="auth-box">
+    <h1 id="formTitle">Login</h1>
+
+    <form id="authForm" novalidate>
+      <label for="username">Username</label>
+      <input id="username" name="username" required />
+
+      <label for="password">Password</label>
+      <div class="password-row">
+        <input id="password" name="password" type="password" required />
+        <button type="button" id="togglePass">Show</button>
+      </div>
+
+      <div id="registerFields" style="display:none;">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" />
+      </div>
+
+      <div id="pwStrength" class="pw-strength" style="display:none;">
+        Strength: <span id="pwStrengthText">—</span>
+      </div>
+
+      <button id="submitBtn" type="submit">Submit</button>
+      <div id="authError" class="error"></div>
+    </form>
+
+    <p class="toggle-line">
+      <span id="toggleText">Don’t have an account?</span>
+      <a href="#" id="toggleLink">Register</a>
+    </p>
+  </div>
+</div>
+
+<!-- ================= DASHBOARD ================= -->
+<div class="dashboard" id="dashboard" style="display:none;">
+  <aside class="sidebar">
+    <div class="company-section"><h2>Task Tracker</h2></div>
+    <ul class="sidebar-list">
+      <li class="active"><span class="icon">📋</span>Tasks</li>
+      <li><span class="icon">📊</span>Analytics</li>
+      <li><span class="icon">⚙️</span>Settings</li>
+    </ul>
+  </aside>
+
+  <div class="content-area">
+    <header class="header">
+      <div>
+        <h2>Dashboard</h2>
+        <div class="welcome">Welcome <strong id="displayUser"></strong></div>
+      </div>
+      <div class="header-actions">
+        <button id="logoutBtn">Logout</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="search-bar">
+        <input class="search-input" placeholder="Search your tasks..." />
+      </div>
+      <div class="card">
+        <h3>Overview</h3>
+        <p>Your daily task analytics will appear here.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ================= SCRIPT ================= -->
+<script>
+const authForm = document.getElementById("authForm");
+const toggleLink = document.getElementById("toggleLink");
+const toggleText = document.getElementById("toggleText");
+const formTitle = document.getElementById("formTitle");
+const registerFields = document.getElementById("registerFields");
+const submitBtn = document.getElementById("submitBtn");
+const authError = document.getElementById("authError");
+const dashboard = document.getElementById("dashboard");
+const authPage = document.getElementById("authPage");
+const displayUser = document.getElementById("displayUser");
+let isRegister = false;
+
+// --- switch between login/register ---
+toggleLink.addEventListener("click", e=>{
+  e.preventDefault();
+  isRegister=!isRegister;
+  authForm.reset(); authError.textContent="";
+  registerFields.style.display=isRegister?"block":"none";
+  formTitle.textContent=isRegister?"Register":"Login";
+  toggleText.textContent=isRegister?"Already have an account?":"Don’t have an account?";
+  toggleLink.textContent=isRegister?"Login":"Register";
+  document.getElementById("pwStrength").style.display=isRegister?"block":"none";
+});
+
+// --- show/hide password ---
+document.getElementById("togglePass").onclick=()=>{
+  const pw=document.getElementById("password");
+  const s=pw.type==="text"; pw.type=s?"password":"text";
+  togglePass.textContent=s?"Show":"Hide";
+};
+
+// --- password strength (for register view) ---
+document.getElementById("password").addEventListener("input",()=>{
+  const v=passwordScore(password.value);
+  document.getElementById("pwStrengthText").textContent=v.label;
+});
+function passwordScore(pw){
+  let s=0; if(pw.length>=8)s++; if(/[A-Z]/.test(pw))s++; if(/[a-z]/.test(pw))s++;
+  if(/[0-9]/.test(pw))s++; if(/[^A-Za-z0-9]/.test(pw))s++;
+  return {label:s>=4?"Strong":s===3?"Medium":s===2?"Weak":"Very weak"};
+}
+
+// --- submit (connect to Django) ---
+authForm.addEventListener("submit",async e=>{
+  e.preventDefault(); authError.textContent="";
+  submitBtn.disabled=true; submitBtn.textContent="Processing…";
+
+  const username=document.getElementById("username").value.trim();
+  const password=document.getElementById("password").value;
+
+  const url=isRegister
+    ?"http://127.0.0.1:8000/api/register/"
+    :"http://127.0.0.1:8000/api/login/";
+
+  try{
+    const res=await fetch(url,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({username,password})
+    });
+    const data=await res.json();
+
+    if(res.ok){
+      if(isRegister){
+        alert("Registration successful! Please login now.");
+        toggleLink.click();
+      }else{
+        localStorage.setItem("username",data.username);
+        displayUser.textContent=data.username;
+        authPage.style.display="none";
+        dashboard.style.display="grid";
+      }
+    }else{
+      authError.textContent=data.error||"Invalid credentials.";
+    }
+  }catch(err){
+    console.error(err);
+    authError.textContent="Server error – check if Django server is running.";
+  }finally{
+    submitBtn.disabled=false;
+    submitBtn.textContent="Submit";
+  }
+});
+
+// --- logout ---
+document.getElementById("logoutBtn").addEventListener("click",async()=>{
+  await fetch("http://127.0.0.1:8000/api/logout/",{method:"POST"});
+  localStorage.removeItem("username");
+  dashboard.style.display="none";
+  authPage.style.display="flex";
+});
+
+// --- auto-login ---
+window.addEventListener("load",()=>{
+  const u=localStorage.getItem("username");
+  if(u){displayUser.textContent=u;authPage.style.display="none";dashboard.style.display="grid";}
+});
+</script>
+</body>
+</html>
